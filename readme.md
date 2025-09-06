@@ -19,7 +19,7 @@ The workflow runs on every `push` to the `master` branch or when triggered manua
 
 ### Step 1: Download the Module
 
-1.  Go to this repository's **[Releases Page](https://github.com/YOUR_USERNAME/YOUR_REPOSITORY/releases)**.
+1.  Go to this repository's **[Releases Page](https://github.com/hzbd/nginx-acme-build/releases)**.
 2.  Find the release corresponding to your NGINX version (e.g., `nginx-1.28.0`).
 3.  Download the `ngx<VERSION>_http_acme_module.so` file from the "Assets" section.
 4.  Place the downloaded `.so` file into your server's NGINX modules directory.
