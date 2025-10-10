@@ -111,10 +111,15 @@ jobs:
       - name: Download and Build with Relative Paths
         env:
           NGINX_VERSION: ${{ needs.check-for-new-version.outputs.version }}
+          OPENSSL_VERSION: 1.1.1w
         run: |
           wget -q http://nginx.org/download/nginx-$NGINX_VERSION.tar.gz
           tar -zxf nginx-$NGINX_VERSION.tar.gz
           git clone --depth 1 https://github.com/nginx/nginx-acme.git
+
+          wget -q https://www.openssl.org/source/openssl-$OPENSSL_VERSION.tar.gz
+          tar -zxf openssl-$OPENSSL_VERSION.tar.gz
+
           cd nginx-$NGINX_VERSION
 
           BUILD_PATH=$(pwd)
@@ -139,6 +144,8 @@ jobs:
             --with-debug \
             --with-pcre-jit \
             --with-http_ssl_module \
+            --with-openssl=../openssl-$OPENSSL_VERSION \
+            --with-openssl-opt=enable-ec_nistp_64_gcc_128 \
             --with-http_stub_status_module \
             --with-http_realip_module \
             --with-http_auth_request_module \
