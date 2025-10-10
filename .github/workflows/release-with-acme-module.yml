@@ -165,7 +165,7 @@ jobs:
             exit 1
           fi
 
-          PACKAGE_BASE_DIR="nginx-acme"
+          PACKAGE_BASE_DIR="nginx_acme"
           mkdir -p "$PACKAGE_BASE_DIR/sbin"
           mkdir -p "$PACKAGE_BASE_DIR/modules"
           mkdir -p "$PACKAGE_BASE_DIR/vhost"
