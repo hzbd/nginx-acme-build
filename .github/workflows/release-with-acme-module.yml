@@ -1,10 +1,7 @@
 #
-# GitHub Actions Workflow to build a truly portable NGINX package.
-# All default paths are compiled as relative paths to ensure no dependency on the system environment.
-#
-# This workflow is triggered by:
-# 1. A push to the 'master' branch.
-# 2. A manual dispatch from the Actions UI.
+# GitHub Actions Workflow to build NGINX packages for multiple Debian versions.
+# This approach uses dynamic linking against the system's libraries for better
+# integration, smaller package size, and easier security patch management via `apt`.
 #
 
 name: Build and Release NGINX with ACME Module Package
@@ -22,20 +19,18 @@ on:
     branches:
       - master
 
-# Grant permissions for the GITHUB_TOKEN to create releases.
 permissions:
   contents: write
 
 jobs:
-  # This job checks if a build is necessary and determines the build context.
+  # This job checks if a new version of NGINX is available or if a manual
+  # build has been triggered. It acts as a gatekeeper for the build jobs.
   check-for-new-version:
     name: Check for New NGINX Stable Version
     runs-on: ubuntu-latest
     outputs:
       should_build: ${{ steps.check_versions.outputs.should_build }}
       version: ${{ steps.check_versions.outputs.version }}
-      build_suffix: ${{ steps.check_versions.outputs.build_suffix }}
-      release_title_suffix: ${{ steps.check_versions.outputs.release_title_suffix }}
     steps:
       - name: Determine version and if build is needed
         id: check_versions
@@ -46,13 +41,11 @@ jobs:
             echo "Manual version specified: $MANUAL_VERSION. Forcing build."
             echo "should_build=true" >> "$GITHUB_OUTPUT"
             echo "version=$MANUAL_VERSION" >> "$GITHUB_OUTPUT"
-            echo "build_suffix=" >> "$GITHUB_OUTPUT"
-            echo "release_title_suffix=" >> "$GITHUB_OUTPUT"
           else
             echo "No manual version specified. Detecting latest stable version..."
             LATEST_STABLE=$(curl -s https://nginx.org/download/ | \
-              grep -o 'nginx-[0-9.]\+\.tar\.gz' | \
-              sed -e 's/nginx-//' -e 's/\.tar\.gz//' | \
+              grep -o 'nginx-[0-9.]\+\\.tar\\.gz' | \
+              sed -e 's/nginx-//' -e 's/\\.tar\\.gz//' | \
               awk -F. '$2 % 2 == 0' | \
               sort -V | \
               tail -n 1)
@@ -66,9 +59,6 @@ jobs:
             LATEST_RELEASE_TAG=$(curl -sf -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
               "https://api.github.com/repos/${{ github.repository }}/releases/latest" | \
               jq -r .tag_name || true)
-
-            echo "build_suffix=-debian-stable" >> "$GITHUB_OUTPUT"
-            echo "release_title_suffix= (Debian Stable)" >> "$GITHUB_OUTPUT"
 
             if [ -z "$LATEST_RELEASE_TAG" ]; then
               echo "No previous release found. Triggering initial build."
@@ -87,19 +77,31 @@ jobs:
             echo "version=$LATEST_STABLE" >> "$GITHUB_OUTPUT"
           fi
 
-  # This job builds and packages NGINX on the latest Debian Stable release.
+  # This job builds the NGINX binary and the ACME module for different
+  # Debian versions in parallel using a matrix strategy.
   build-debian:
-    name: Build and Package for Debian Stable
+    name: Build for ${{ matrix.os_name }}
     needs: check-for-new-version
     if: needs.check-for-new-version.outputs.should_build == 'true'
     runs-on: ubuntu-latest
-    # container: debian:stable
-    container: debian:11 # GLIBC 2.31
+
+    # Define the matrix to run this job for each specified Debian version.
+    strategy:
+      matrix:
+        include:
+          - os_name: Debian 11 (Bullseye)
+            os_tag: '11'
+          - os_name: Debian 12 (Bookworm)
+            os_tag: '12'
+
+    # Use the matrix variable to select the correct Docker container.
+    container: debian:${{ matrix.os_tag }}
 
     steps:
       - name: Install Build Dependencies
         run: |
           apt-get update
+          # Install libssl-dev for dynamic linking against the system's OpenSSL.
           apt-get install -y --no-install-recommends \
             build-essential libclang-dev pkg-config libpcre2-dev zlib1g-dev libssl-dev \
             libxml2-dev libxslt1-dev libgd-dev libgeoip-dev libperl-dev \
@@ -108,25 +110,20 @@ jobs:
       - name: Install Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Download and Build with Relative Paths
+      - name: Download and Build (Dynamically Linked)
         env:
           NGINX_VERSION: ${{ needs.check-for-new-version.outputs.version }}
-          OPENSSL_VERSION: 1.1.1w
         run: |
           wget -q http://nginx.org/download/nginx-$NGINX_VERSION.tar.gz
           tar -zxf nginx-$NGINX_VERSION.tar.gz
           git clone --depth 1 https://github.com/nginx/nginx-acme.git
-
-          wget -q https://www.openssl.org/source/openssl-$OPENSSL_VERSION.tar.gz
-          tar -zxf openssl-$OPENSSL_VERSION.tar.gz
-
           cd nginx-$NGINX_VERSION
 
           BUILD_PATH=$(pwd)
           CC_OPT_VALUE="-g -O2 -ffile-prefix-map=$BUILD_PATH=. -fstack-protector-strong -Wformat -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -fPIC"
 
-          # --with-ld-opt='-Wl,-z,relro -Wl,-z,now -Wl,--as-needed -fPIC -Wl,--export-dynamic'
-
+          # Configure NGINX for a portable layout, linking against system libraries.
+          # The ACME module is built as a dynamic module (`.so` file).
           ./configure \
             --with-cc-opt="$CC_OPT_VALUE" \
             --with-ld-opt='-Wl,-z,relro -Wl,-z,now -Wl,--as-needed -fPIC' \
@@ -146,56 +143,29 @@ jobs:
             --with-debug \
             --with-pcre-jit \
             --with-http_ssl_module \
-            --with-openssl=../openssl-$OPENSSL_VERSION \
-            --with-openssl-opt=enable-ec_nistp_64_gcc_128 \
             --with-http_stub_status_module \
             --with-http_realip_module \
             --with-http_auth_request_module \
             --with-http_v2_module \
-            --with-http_dav_module \
-            --with-http_slice_module \
-            --with-threads \
-            --with-http_addition_module \
-            --with-http_gunzip_module \
-            --with-http_gzip_static_module \
-            --with-http_mp4_module \
-            --with-http_random_index_module \
-            --with-http_secure_link_module \
-            --with-http_sub_module \
-            --with-mail_ssl_module \
-            --with-stream_ssl_module \
-            --with-stream_ssl_preread_module \
-            --with-stream_realip_module \
-            --with-http_geoip_module=dynamic \
-            --with-http_image_filter_module=dynamic \
-            --with-http_perl_module=dynamic \
-            --with-http_xslt_module=dynamic \
-            --with-mail=dynamic \
-            --with-stream=dynamic \
-            --with-stream_geoip_module=dynamic \
-            --add-module=../nginx-acme/
+            --add-dynamic-module=../nginx-acme/
 
           make
 
       - name: Package Artifacts
         env:
           NGINX_VERSION: ${{ needs.check-for-new-version.outputs.version }}
-          BUILD_SUFFIX: ${{ needs.check-for-new-version.outputs.build_suffix }}
+          OS_TAG: ${{ matrix.os_tag }}
         run: |
           SOURCE_DIR="nginx-$NGINX_VERSION"
-          # MODULE_PATH="$SOURCE_DIR/objs/ngx_http_acme_module.so"
+          MODULE_PATH="$SOURCE_DIR/objs/ngx_http_acme_module.so"
           NGINX_BINARY_PATH="$SOURCE_DIR/objs/nginx"
 
-          # if [ ! -f "$MODULE_PATH" ] || [ ! -f "$NGINX_BINARY_PATH" ]; then
-          if [ ! -f "$NGINX_BINARY_PATH" ]; then
-            echo "::error::Build failed! One or more required files were not created."
+          if [ ! -f "$MODULE_PATH" ] || [ ! -f "$NGINX_BINARY_PATH" ]; then
+            echo "::error::Build failed! Required files were not created."
             exit 1
           fi
 
-          echo "Build successful. Packaging artifacts..."
-
           PACKAGE_BASE_DIR="nginx-acme"
-          # Create all necessary runtime directories
           mkdir -p "$PACKAGE_BASE_DIR/sbin"
           mkdir -p "$PACKAGE_BASE_DIR/modules"
           mkdir -p "$PACKAGE_BASE_DIR/vhost"
@@ -209,35 +179,37 @@ jobs:
           mkdir -p "$PACKAGE_BASE_DIR/temp/uwsgi"
 
           cp "$NGINX_BINARY_PATH" "$PACKAGE_BASE_DIR/sbin/nginx"
-          # cp "$MODULE_PATH" "$PACKAGE_BASE_DIR/modules/ngx_http_acme_module.so"
+          cp "$MODULE_PATH" "$PACKAGE_BASE_DIR/modules/ngx_http_acme_module.so"
           cp "$SOURCE_DIR/conf/mime.types" "$PACKAGE_BASE_DIR/"
           cp "$SOURCE_DIR/conf/nginx.conf" "$PACKAGE_BASE_DIR/"
 
-          # Adjust nginx.conf for clarity and best practice
+          # Add the `load_module` directive back to the config template.
           CONFIG_FILE="$PACKAGE_BASE_DIR/nginx.conf"
-          # sed -i '1s|^|# To enable the NGINX ACME module, uncomment the following line:\n# load_module modules/ngx_http_acme_module.so;\n\n|' "$CONFIG_FILE"
+          sed -i '1s|^|# To enable the NGINX ACME module, uncomment the following line:\n# load_module modules/ngx_http_acme_module.so;\n\n|' "$CONFIG_FILE"
           sed -i 's|#pid        logs/nginx.pid;|pid        run/nginx.pid;|' "$CONFIG_FILE"
           sed -i '/^\s*include\s*mime.types;\s*$/a \
               client_body_temp_path temp/body;\n    proxy_temp_path temp/proxy;\n    fastcgi_temp_path temp/fastcgi;\n    scgi_temp_path temp/scgi;\n    uwsgi_temp_path temp/uwsgi;' "$CONFIG_FILE"
           sed -i '/^\s*include\s*mime.types;\s*$/i # Load virtual host configs.\n    include vhost/*.conf;' "$CONFIG_FILE"
 
-          # Create the vhost example file
           cat <<'EOF' > "$PACKAGE_BASE_DIR/vhost/default.conf.example"
           # This is an example virtual host configuration file.
           # To use it, rename this file to 'your_site.conf' and fill in your details.
 
+          # --- HTTP Server: Handles ACME challenge and redirects to HTTPS ---
           server {
               listen 80;
               listen [::]:80;
 
-              server_name your_domain.com;
+              # Replace with your domain(s)
+              server_name your_domain.com www.your_domain.com;
 
               # This location is required by the ACME module to solve the HTTP-01 challenge.
-              # Create this directory inside the 'nginx-acme-package' directory.
+              # Create this directory: `mkdir -p acme/challenge-root`
               location /.well-known/acme-challenge/ {
                   root acme/challenge-root;
               }
 
+              # For all other requests, redirect HTTP traffic to HTTPS.
               location / {
                   return 301 https://$host$request_uri;
               }
@@ -245,28 +217,55 @@ jobs:
 
           # --- HTTPS Server Block (Your main configuration) ---
           #
+          # IMPORTANT: Uncomment this entire block only AFTER the first certificate
+          # has been successfully obtained. Otherwise, NGINX will fail to start
+          # because the certificate files do not exist yet.
+          #
           # server {
           #     listen 443 ssl http2;
           #     listen [::]:443 ssl http2;
           #
-          #     server_name your_domain.com;
+          #     server_name your_domain.com www.your_domain.com;
           #
           #     # --- ACME Module Configuration ---
-          #     acme on;
-          #     acme_storage_path acme/storage;
           #
+          #     # Enable automatic certificate management for this server block.
+          #     acme on;
+          #
+          #     # Define the path where certificates and account keys will be stored.
+          #     # This path is relative to the directory where you run nginx (the package root).
+          #     # The module will create a `storage` subdirectory inside `acme/`.
+          #     acme_storage_path acme;
+          #
+          #     # Tell the module which certificate to manage.
           #     acme_certificate your_domain.com {
+          #         # Set your Let's Encrypt account email (required).
           #         account mail@your_domain.com;
+          #         # Add any alternative domains for the same certificate (optional).
+          #         # domains www.your_domain.com;
           #     }
           #
+          #     # --- SSL Configuration ---
+          #
+          #     # Point NGINX to the certificate and key files managed by the ACME module.
+          #     # The paths are relative to the 'acme_storage_path' defined above.
           #     ssl_certificate acme/storage/your_domain.com/fullchain.pem;
           #     ssl_certificate_key acme/storage/your_domain.com/key.pem;
           #
-          #     # ... your other SSL and location settings ...
+          #     # Recommended: Add modern SSL/TLS parameters for security.
+          #     ssl_protocols TLSv1.2 TLSv1.3;
+          #     ssl_ciphers HIGH:!aNULL:!MD5;
+          #
+          #     # --- Website Configuration ---
+          #
+          #     # Your website's root directory and other configurations go here.
+          #     location / {
+          #         root /path/to/your/website;
+          #         index index.html;
+          #     }
           # }
           EOF
-
-          # Create the final README file
+          
           cat <<'EOF' > "$PACKAGE_BASE_DIR/README.txt"
           # NGINX with ACME Module Package
 
@@ -277,7 +276,7 @@ jobs:
           **Step 1: Unpack & Enter Directory**
           ```bash
           tar -xzf <archive-name>.tar.gz
-          cd nginx-acme-package
+          cd nginx-acme
           ```
 
           **Step 2: Enable the ACME Module**
@@ -286,14 +285,12 @@ jobs:
           **Step 3: Configure Your Website**
           1. Rename `vhost/default.conf.example` to `vhost/your_site.conf`.
           2. Edit the new file with your domain and settings.
-          3. Create the ACME challenge directory: `mkdir -p acme/challenge-root`
+          3. Create the ACME challenge directory if needed.
 
           **Step 4: Start NGINX**
-          Because all paths are now relative, you just need to provide the config file.
-          The `-p` flag is no longer strictly necessary but is still good practice.
-
+          (Commands remain the same, to be run from inside the `nginx-acme` directory)
           ```bash
-          # Test configuration (from inside nginx-acme-package directory)
+          # Test configuration
           ./sbin/nginx -p $(pwd) -c nginx.conf -t
 
           # Start NGINX
@@ -305,45 +302,51 @@ jobs:
           - **Stop:** `./sbin/nginx -p $(pwd) -s stop`
           EOF
 
-          # --- FIX: Create the archive with a dynamic name ---
-          ARTIFACT_NAME="nginx-${NGINX_VERSION}-acme${BUILD_SUFFIX}.tar.gz"
+          # Use the matrix variable to create a uniquely named archive.
+          ARTIFACT_NAME="nginx-${NGINX_VERSION}-acme-debian${OS_TAG}.tar.gz"
           tar -czf "$ARTIFACT_NAME" "$PACKAGE_BASE_DIR"
 
-          # Prepare for upload
           ARTIFACT_DIR=artifact
           mkdir -p "$ARTIFACT_DIR"
           mv "$ARTIFACT_NAME" "$ARTIFACT_DIR/"
           sha256sum "$ARTIFACT_DIR/$ARTIFACT_NAME" > "$ARTIFACT_DIR/$ARTIFACT_NAME.sha256"
-          echo "Packaged artifact created: $ARTIFACT_DIR/$ARTIFACT_NAME"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nginx-package
+          # Use a unique name for the artifact to prevent conflicts between matrix jobs.
+          name: nginx-package-debian${{ matrix.os_tag }}
           path: artifact/
 
+  # This job runs only after all matrix build jobs have succeeded. It collects
+  # all the generated packages and publishes them to a single GitHub Release.
   create-release:
     name: Create GitHub Release
     needs: [check-for-new-version, build-debian]
     if: needs.check-for-new-version.outputs.should_build == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Download all artifacts
+      - name: Download all artifacts from build jobs
         uses: actions/download-artifact@v4
         with:
-          name: nginx-package
           path: ./dist
+          # Use a pattern to download all artifacts produced by the matrix.
+          pattern: nginx-package-*
+          merge-multiple: true
 
       - name: List downloaded files for debugging
         run: ls -R ./dist
 
-      - name: Prepare release content
+      - name: Prepare release content and assets
         id: prep
         run: |
           mkdir -p release-assets
+          # Move all downloaded packages to the release assets directory.
           find ./dist -name "*.tar.gz" -exec mv {} ./release-assets/ \;
-          echo "### SHA256 Checksum" > release-body.md
+
+          echo "### SHA256 Checksums" > release-body.md
           echo '```' >> release-body.md
+          # Combine all checksum files into the release body.
           find ./dist -name "*.sha256" -exec cat {} + >> release-body.md
           echo '```' >> release-body.md
           {
@@ -352,11 +355,12 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Create Release and Upload Assets
+      - name: Create Release and Upload All Assets
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           tag_name: nginx-${{ needs.check-for-new-version.outputs.version }}
-          name: NGINX ${{ needs.check-for-new-version.outputs.version }} with ACME Module Package${{ needs.check-for-new-version.outputs.release_title_suffix }}
+          name: NGINX ${{ needs.check-for-new-version.outputs.version }} with ACME Module Packages
           body: ${{ steps.prep.outputs.body }}
-          files: ./release-assets/*
+          # Use a glob pattern to upload all packaged archives.
+          files: ./release-assets/*.tar.gz
