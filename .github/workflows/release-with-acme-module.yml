@@ -124,12 +124,11 @@ jobs:
 
           BUILD_PATH=$(pwd)
           CC_OPT_VALUE="-g -O2 -ffile-prefix-map=$BUILD_PATH=. -fstack-protector-strong -Wformat -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -fPIC"
-          
+
           # --with-ld-opt='-Wl,-z,relro -Wl,-z,now -Wl,--as-needed -fPIC -Wl,--export-dynamic'
 
           ./configure \
             --with-cc-opt="$CC_OPT_VALUE" \
-
             --with-ld-opt='-Wl,-z,relro -Wl,-z,now -Wl,--as-needed -fPIC' \
             --prefix=.. \
             --conf-path=nginx.conf \
