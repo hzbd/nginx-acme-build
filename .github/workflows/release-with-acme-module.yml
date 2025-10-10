@@ -212,12 +212,86 @@ jobs:
 
           # Create the vhost example file
           cat <<'EOF' > "$PACKAGE_BASE_DIR/vhost/default.conf.example"
-          # (Content is the same as before)
+          # This is an example virtual host configuration file.
+          # To use it, rename this file to 'your_site.conf' and fill in your details.
+
+          server {
+              listen 80;
+              listen [::]:80;
+
+              server_name your_domain.com;
+
+              # This location is required by the ACME module to solve the HTTP-01 challenge.
+              # Create this directory inside the 'nginx-acme-package' directory.
+              location /.well-known/acme-challenge/ {
+                  root acme/challenge-root;
+              }
+
+              location / {
+                  return 301 https://$host$request_uri;
+              }
+          }
+
+          # --- HTTPS Server Block (Your main configuration) ---
+          #
+          # server {
+          #     listen 443 ssl http2;
+          #     listen [::]:443 ssl http2;
+          #
+          #     server_name your_domain.com;
+          #
+          #     # --- ACME Module Configuration ---
+          #     acme on;
+          #     acme_storage_path acme/storage;
+          #
+          #     acme_certificate your_domain.com {
+          #         account mail@your_domain.com;
+          #     }
+          #
+          #     ssl_certificate acme/storage/your_domain.com/fullchain.pem;
+          #     ssl_certificate_key acme/storage/your_domain.com/key.pem;
+          #
+          #     # ... your other SSL and location settings ...
+          # }
           EOF
 
           # Create the final README file
           cat <<'EOF' > "$PACKAGE_BASE_DIR/README.txt"
-          # (Content is the same as before)
+          # NGINX with ACME Module Package
+
+          This package is fully portable. All paths in the configuration have been made relative.
+
+          ## Quick Start Guide
+
+          **Step 1: Unpack & Enter Directory**
+          ```bash
+          tar -xzf <archive-name>.tar.gz
+          cd nginx-acme-package
+          ```
+
+          **Step 2: Enable the ACME Module**
+          Open `nginx.conf` and uncomment the `load_module` line at the top.
+
+          **Step 3: Configure Your Website**
+          1. Rename `vhost/default.conf.example` to `vhost/your_site.conf`.
+          2. Edit the new file with your domain and settings.
+          3. Create the ACME challenge directory: `mkdir -p acme/challenge-root`
+
+          **Step 4: Start NGINX**
+          Because all paths are now relative, you just need to provide the config file.
+          The `-p` flag is no longer strictly necessary but is still good practice.
+
+          ```bash
+          # Test configuration (from inside nginx-acme-package directory)
+          ./sbin/nginx -p $(pwd) -c nginx.conf -t
+
+          # Start NGINX
+          ./sbin/nginx -p $(pwd) -c nginx.conf
+          ```
+
+          **Step 5: Manage NGINX**
+          - **Reload:** `./sbin/nginx -p $(pwd) -s reload`
+          - **Stop:** `./sbin/nginx -p $(pwd) -s stop`
           EOF
 
           # --- FIX: Create the archive with a dynamic name ---
