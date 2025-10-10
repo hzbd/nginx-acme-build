@@ -1,6 +1,6 @@
 #
 # GitHub Actions Workflow to automatically build the NGINX binary, the ACME module,
-# package them with configuration files, and release them as a single archive.
+# package them with commented configuration templates, and release them as a single archive.
 # This workflow targets the latest Debian Stable release.
 #
 # This workflow is triggered by:
@@ -81,7 +81,7 @@ jobs:
             echo "version=$LATEST_STABLE" >> "$GITHUB_OUTPUT"
           fi
 
-  # This job builds the module and NGINX binary on the latest Debian Stable release.
+  # This job builds and packages NGINX on the latest Debian Stable release.
   build-debian:
     name: Build and Package for Debian Stable
     needs: check-for-new-version
@@ -103,7 +103,7 @@ jobs:
       - name: Install Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      # Step 3: Download source code and build the module and NGINX.
+      # Step 3: Download source code and build NGINX with the ACME module.
       - name: Download and Build
         env:
           NGINX_VERSION: ${{ needs.check-for-new-version.outputs.version }}
@@ -164,7 +164,7 @@ jobs:
 
           make
 
-      # Step 4: Package the compiled artifacts (binary, module, configs) into a single tarball.
+      # Step 4: Package the artifacts with configuration templates.
       - name: Package Artifacts
         env:
           NGINX_VERSION: ${{ needs.check-for-new-version.outputs.version }}
@@ -178,28 +178,149 @@ jobs:
             exit 1
           fi
 
-          echo "Build successful. Packaging artifacts..."
+          echo "Build successful. Packaging artifacts with templates..."
 
           PACKAGE_BASE_DIR="nginx-acme-package"
+          # Create the desired directory structure
           mkdir -p "$PACKAGE_BASE_DIR/sbin"
           mkdir -p "$PACKAGE_BASE_DIR/modules"
-          mkdir -p "$PACKAGE_BASE_DIR/conf/conf.d"
+          mkdir -p "$PACKAGE_BASE_DIR/vhost.d"
+          mkdir -p "$PACKAGE_BASE_DIR/acme"
 
           # Copy compiled files
           cp "$NGINX_BINARY_PATH" "$PACKAGE_BASE_DIR/sbin/nginx"
           cp "$MODULE_PATH" "$PACKAGE_BASE_DIR/modules/ngx_http_acme_module.so"
 
-          # Copy default config files
-          cp "$SOURCE_DIR/conf/nginx.conf" "$PACKAGE_BASE_DIR/conf/"
-          cp "$SOURCE_DIR/conf/mime.types" "$PACKAGE_BASE_DIR/conf/"
+          # Copy and modify config files
+          cp "$SOURCE_DIR/conf/mime.types" "$PACKAGE_BASE_DIR/"
+          cp "$SOURCE_DIR/conf/nginx.conf" "$PACKAGE_BASE_DIR/"
 
-          # Add a README file
-          echo "This package contains NGINX ${{ needs.check-for-new-version.outputs.version }} with the ACME module." > "$PACKAGE_BASE_DIR/README.txt"
-          echo "To load the module, ensure this line is at the top of your nginx.conf:" >> "$PACKAGE_BASE_DIR/README.txt"
-          echo "load_module modules/ngx_http_acme_module.so;" >> "$PACKAGE_BASE_DIR/README.txt"
+          # --- FIX: Add commented-out instructions to nginx.conf ---
+          sed -i '1s|^|# To enable the NGINX ACME module, uncomment the following line:\n# load_module modules/ngx_http_acme_module.so;\n\n|' "$PACKAGE_BASE_DIR/nginx.conf"
+          sed -i 's|include       conf.d/\*.conf;|include       vhost.d/\*.conf;|' "$PACKAGE_BASE_DIR/nginx.conf"
+
+          # --- FIX: Create a detailed vhost example file ---
+          cat <<'EOF' > "$PACKAGE_BASE_DIR/vhost.d/default.conf.example"
+          # This is an example virtual host configuration file.
+          # To use it, rename this file to 'your_site.conf' and fill in your details.
+
+          server {
+              listen 80;
+              listen [::]:80;
+
+              # Replace with your domain(s)
+              server_name your_domain.com;
+
+              # This location is required by the ACME module to solve the HTTP-01 challenge.
+              # Make sure the root path exists and is readable by the NGINX worker user.
+              location /.well-known/acme-challenge/ {
+                  root /var/www/html;
+              }
+
+              # After obtaining a certificate, all HTTP traffic should be redirected to HTTPS.
+              location / {
+                  return 301 https://$host$request_uri;
+              }
+          }
+
+          # --- HTTPS Server Block (Your main configuration) ---
+          #
+          # After the first successful certificate acquisition, uncomment this block.
+          #
+          # server {
+          #     listen 443 ssl http2;
+          #     listen [::]:443 ssl http2;
+          #
+          #     server_name your_domain.com;
+          #
+          #     # --- ACME Module Configuration ---
+          #     # This enables automatic certificate management for this server block.
+          #     acme on;
+          #
+          #     # Define the path where certificates and account keys will be stored.
+          #     # IMPORTANT: Use the ABSOLUTE path to the 'acme' directory.
+          #     # Example: /home/user/nginx-acme-package/acme
+          #     acme_storage_path /absolute/path/to/nginx-acme-package/acme;
+          #
+          #     # Tell the module which certificate to manage.
+          #     acme_certificate your_domain.com {
+          #         # Set your Let's Encrypt account email (required).
+          #         account mail@your_domain.com;
+          #         # Add any alternative domains for the same certificate (optional).
+          #         # domains www.your_domain.com;
+          #     }
+          #
+          #     # Point NGINX to the certificate and key files managed by the ACME module.
+          #     # The paths are relative to the 'acme_storage_path' defined above.
+          #     ssl_certificate your_domain.com/fullchain.pem;
+          #     ssl_certificate_key your_domain.com/key.pem;
+          #
+          #     # Recommended: Add modern SSL/TLS parameters for security.
+          #     # ssl_protocols TLSv1.2 TLSv1.3;
+          #     # ssl_ciphers HIGH:!aNULL:!MD5;
+          #
+          #     # Your website's root directory and other configurations go here.
+          #     root /var/www/html/your_domain;
+          #     index index.html;
+          #
+          #     location / {
+          #         try_files $uri $uri/ =404;
+          #     }
+          # }
+          EOF
+
+          # --- FIX: Create a new, more detailed README file ---
+          cat <<EOF > "$PACKAGE_BASE_DIR/README.txt"
+          # NGINX with ACME Module Package
+
+          This package contains NGINX version ${{ needs.check-for-new-version.outputs.version }} pre-compiled with the nginx-acme module for Debian Stable.
+
+          ## Quick Start Guide
+
+          **Step 1: Unpack the Archive**
+          \`\`\`bash
+          tar -xzf <archive-name>.tar.gz
+          cd nginx-acme-package
+          \`\`\`
+
+          **Step 2: Enable the ACME Module**
+          Open the \`nginx.conf\` file and uncomment the following line at the top:
+          \`\`\`nginx
+          # load_module modules/ngx_http_acme_module.so;
+          \`\`\`
+          becomes:
+          \`\`\`nginx
+          load_module modules/ngx_http_acme_module.so;
+          \`\`\`
+
+          **Step 3: Configure Your Website**
+          1. Rename the example virtual host file:
+             \`\`\`bash
+             mv vhost.d/default.conf.example vhost.d/your_site.conf
+             \`\`\`
+          2. Edit \`vhost.d/your_site.conf\` and replace all placeholders like \`your_domain.com\`, \`/var/www/html\`, and especially \`/absolute/path/to/nginx-acme-package/acme\` with your actual data.
+
+          **Step 4: Create Required Directories**
+          Make sure the web root directory you specified in your config file exists (e.g., \`mkdir -p /var/www/html\`). The \`acme\` directory is already created for you.
+
+          **Step 5: Start NGINX**
+          It is crucial to start NGINX from within the \`nginx-acme-package\` directory using the \`-p\` flag. This tells NGINX where to find its configuration and modules.
+          \`\`\`bash
+          # Test your configuration first
+          ./sbin/nginx -p \$(pwd) -c nginx.conf -t
+
+          # If the test is successful, start NGINX
+          ./sbin/nginx -p \$(pwd) -c nginx.conf
+          \`\`\`
+
+          **Step 6: Manage NGINX**
+          Use these commands from the \`nginx-acme-package\` directory:
+          - **Reload config:** \`./sbin/nginx -p \$(pwd) -s reload\`
+          - **Stop NGINX:** \`./sbin/nginx -p \$(pwd) -s stop\`
+          EOF
 
           # Create the compressed archive
-          ARTIFACT_NAME="nginx-acme-${NGINX_VERSION}-debian-stable.tar.gz"
+          ARTIFACT_NAME="nginx-${NGINX_VERSION}-acme-debian-stable.tar.gz"
           tar -czf "$ARTIFACT_NAME" "$PACKAGE_BASE_DIR"
 
           # Prepare for upload
@@ -208,7 +329,6 @@ jobs:
           mv "$ARTIFACT_NAME" "$ARTIFACT_DIR/"
           sha256sum "$ARTIFACT_DIR/$ARTIFACT_NAME" > "$ARTIFACT_DIR/$ARTIFACT_NAME.sha256"
           echo "Packaged artifact created: $ARTIFACT_DIR/$ARTIFACT_NAME"
-
 
       # Step 5: Upload the packaged artifact to be used in the release job.
       - name: Upload Artifact
@@ -253,6 +373,6 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           tag_name: nginx-${{ needs.check-for-new-version.outputs.version }}
-          name: NGINX ${{ needs.check-for-new-version.outputs.version }} with ACME Module (Debian Stable)
+          name: NGINX ${{ needs.check-for-new-version.outputs.version }} with ACME Module Package (Debian Stable)
           body: ${{ steps.prep.outputs.body }}
           files: ./release-assets/*
