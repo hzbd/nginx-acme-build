@@ -298,7 +298,7 @@ jobs:
           ARTIFACT_DIR=artifact
           mkdir -p "$ARTIFACT_DIR"
           mv "$ARTIFACT_NAME" "$ARTIFACT_DIR/"
-          sha2sodocker run --rm -v $(pwd):/workspace -w /workspace github/super-linter:v6.2.0 --filter-regex-include="\.github/workflows/.*"m "$ARTIFACT_DIR/$ARTIFACT_NAME" > "$ARTIFACT_DIR/$ARTIFACT_NAME.sha256"
+          sha256sum "$ARTIFACT_DIR/$ARTIFACT_NAME" > "$ARTIFACT_DIR/$ARTIFACT_NAME.sha256"
           echo "Packaged artifact created: $ARTIFACT_DIR/$ARTIFACT_NAME"
 
       - name: Upload Artifact
