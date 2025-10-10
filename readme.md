@@ -97,3 +97,16 @@ nginx-acme-package/
 This package is designed as a standalone, "green" application. It **cannot and should not** be used to replace the `/usr/sbin/nginx` binary installed by system package managers like `apt`.
 
 Attempting to do so will lead to critical issues, including path conflicts, module incompatibility, and a broken system package state. Please use this package as a complete, self-contained service.
+
+## 🔧 Build Your Own Version
+
+If you require a package for a specific (or even an older, nginx 1.25.0 or later.) version of NGINX, or if you wish to customize the compile-time parameters, you can easily fork this repository and build it yourself.
+
+1.  **Fork this Repository**: Click the 'Fork' button in the top-right corner of this page.
+2.  **Enable Actions**: In your forked repository, navigate to the 'Actions' tab and click the button to enable workflows.
+3.  **Manually Trigger the Workflow**:
+    *   In the left sidebar, click on the 'Build and Release NGINX with ACME Module Package' workflow.
+    *   Click the 'Run workflow' dropdown button that appears on the right.
+    *   In the 'Optional: Specify an NGINX version to build' input field, enter the exact NGINX version you want to build (e.g., `1.26.1`).
+    *   Click the green 'Run workflow' button to start the build.
+4.  **Download Your Artifact**: Once the workflow is complete, a new release will be automatically published on your fork's 'Releases' page. You can download your custom-built package from there.

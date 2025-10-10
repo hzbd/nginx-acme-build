@@ -97,3 +97,16 @@ nginx-acme-package/
 本软件包被设计为一个独立的“绿色软件”，**不能**用于替换由 Debian/Ubuntu 官方 `apt` 包安装的 `/usr/sbin/nginx` 文件。
 
 直接替换会导致路径冲突、模块不兼容和系统包管理器损坏等严重问题。请将此软件包作为一个完整的、自包含的服务来运行。
+
+## 🔧 构建您自己的版本
+
+如果您需要一个特定（甚至是旧的，但至少是1.25.0以后的版本）NGINX 版本，或者想要自定义编译参数，您可以轻松地 fork 本仓库并自行构建。
+
+1.  **Fork 本仓库**: 点击页面右上角的 'Fork' 按钮。
+2.  **启用 Actions**: 在您 fork 后的仓库页面，进入 'Actions' 标签页，并按提示启用 GitHub Actions。
+3.  **手动触发构建**:
+    *   在左侧边栏点击 'Build and Release NGINX with ACME Module Package' 工作流。
+    *   点击右侧的 'Run workflow' 下拉按钮。
+    *   在 'Optional: Specify an NGINX version to build' 输入框中，填入您想要构建的 NGINX 版本号（例如 `1.26.1`）。
+    *   点击绿色的 'Run workflow' 按钮开始构建。
+4.  **获取产物**: 构建完成后，一个新的 Release 将会自动创建在您自己仓库的 'Releases' 页面，您可以从中下载您的定制软件包。
