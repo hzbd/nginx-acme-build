@@ -179,7 +179,7 @@ jobs:
           # Create all necessary runtime directories
           mkdir -p "$PACKAGE_BASE_DIR/sbin"
           mkdir -p "$PACKAGE_BASE_DIR/modules"
-          mkdir -p "$PACKAGE_BASE_DIR/vhost.d"
+          mkdir -p "$PACKAGE_BASE_DIR/vhost"
           mkdir -p "$PACKAGE_BASE_DIR/acme"
           mkdir -p "$PACKAGE_BASE_DIR/logs"
           mkdir -p "$PACKAGE_BASE_DIR/run"
@@ -202,12 +202,12 @@ jobs:
           # The default http block from NGINX source doesn't contain these, so we add them.
           sed -i '/^\s*include\s*mime.types;\s*$/a \
               client_body_temp_path temp/body;\n    proxy_temp_path temp/proxy;\n    fastcgi_temp_path temp/fastcgi;\n    scgi_temp_path temp/scgi;\n    uwsgi_temp_path temp/uwsgi;' "$CONFIG_FILE"
-          # Ensure it includes from our vhost.d directory
-          sed -i '/^\s*include\s*mime.types;\s*$/i # Load virtual host configs.\n    include vhost.d/*.conf;' "$CONFIG_FILE"
+          # Ensure it includes from our vhost directory
+          sed -i '/^\s*include\s*mime.types;\s*$/i # Load virtual host configs.\n    include vhost/*.conf;' "$CONFIG_FILE"
 
 
           # Create the vhost example file
-          cat <<'EOF' > "$PACKAGE_BASE_DIR/vhost.d/default.conf.example"
+          cat <<'EOF' > "$PACKAGE_BASE_DIR/vhost/default.conf.example"
           # This is an example virtual host configuration file.
           # To use it, rename this file to 'your_site.conf' and fill in your details.
 
@@ -269,7 +269,7 @@ jobs:
           Open `nginx.conf` and uncomment the `load_module` line at the top.
 
           **Step 3: Configure Your Website**
-          1. Rename `vhost.d/default.conf.example` to `vhost.d/your_site.conf`.
+          1. Rename `vhost/default.conf.example` to `vhost/your_site.conf`.
           2. Edit the new file with your domain and settings.
           3. Create the ACME challenge directory: `mkdir -p acme/challenge-root`
 

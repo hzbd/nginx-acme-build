@@ -29,7 +29,7 @@ nginx-acme-package/
 ├── run/            # 存放 nginx.pid 文件
 ├── sbin/           # 存放 nginx 二进制可执行文件
 ├── temp/           # 存放代理、FastCGI 等临时文件
-├── vhost.d/        # 【重要】存放您的网站配置文件
+├── vhost/        # 【重要】存放您的网站配置文件
 ├── mime.types      # MIME 类型定义文件
 ├── nginx.conf      # 主配置文件
 └── README.txt      # 包含在此处的快速入门指南
@@ -59,12 +59,12 @@ nginx-acme-package/
     去掉 `#` 号以启用它。
 
 2.  **配置您的网站**:
-    `vhost.d` 目录是存放您所有网站配置的地方。
+    `vhost` 目录是存放您所有网站配置的地方。
     a. 首先，复制并重命名示例文件：
     ```bash
-    cp vhost.d/default.conf.example vhost.d/your_domain.conf
+    cp vhost/default.conf.example vhost/your_domain.conf
     ```
-    b. 编辑 `vhost.d/your_domain.conf`，将其中的 `your_domain.com`、`mail@your_domain.com` 等占位符替换为您自己的信息。
+    b. 编辑 `vhost/your_domain.conf`，将其中的 `your_domain.com`、`mail@your_domain.com` 等占位符替换为您自己的信息。
     c. 根据示例文件中的提示，创建 ACME 挑战所需的目录：
     ```bash
     mkdir -p acme/challenge-root

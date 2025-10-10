@@ -29,7 +29,7 @@ nginx-acme-package/
 ├── run/            # Stores the nginx.pid file
 ├── sbin/           # Contains the nginx executable binary
 ├── temp/           # For proxy, FastCGI, and other temporary files
-├── vhost.d/        # [IMPORTANT] Place your website server block configs here
+├── vhost/        # [IMPORTANT] Place your website server block configs here
 ├── mime.types      # Default MIME type definitions
 ├── nginx.conf      # Main configuration file
 └── README.txt      # A quick start guide included in the package
@@ -59,12 +59,12 @@ nginx-acme-package/
     Remove the leading `#` to enable it.
 
 2.  **Configure Your Website**:
-    The `vhost.d` directory is where all your site configurations live.
+    The `vhost` directory is where all your site configurations live.
     a. First, copy the example file to create your own config:
     ```bash
-    cp vhost.d/default.conf.example vhost.d/your_domain.conf
+    cp vhost/default.conf.example vhost/your_domain.conf
     ```
-    b. Edit `vhost.d/your_domain.conf`, replacing placeholders like `your_domain.com` and `mail@your_domain.com` with your actual information.
+    b. Edit `vhost/your_domain.conf`, replacing placeholders like `your_domain.com` and `mail@your_domain.com` with your actual information.
     c. As instructed in the example config, create the directory needed for the ACME challenge:
     ```bash
     mkdir -p acme/challenge-root
