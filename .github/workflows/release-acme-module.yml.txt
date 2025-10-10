@@ -1,19 +1,19 @@
 #
-# GitHub Actions Workflow to automatically build the NGINX binary, the ACME module,
-# package them with configuration files, and release them as a single archive.
-# This workflow targets the latest Debian Stable release.
+# GitHub Actions Workflow to automatically build the NGINX ACME module
+# for the latest Debian Stable release, with versioned artifact naming.
 #
 # This workflow is triggered by:
 # 1. A push to the 'master' branch.
 # 2. A manual dispatch from the Actions UI.
 #
 
-name: Build and Release NGINX and ACME Module Package
+name: Build and Release NGINX ACME Module
 
 on:
   workflow_dispatch:
     inputs:
       nginx_version:
+        # --- FIX: Changed the description to English ---
         description: 'Optional: Specify an NGINX version to build (e.g., 1.28.0)'
         required: false
         default: ''
@@ -81,9 +81,9 @@ jobs:
             echo "version=$LATEST_STABLE" >> "$GITHUB_OUTPUT"
           fi
 
-  # This job builds the module and NGINX binary on the latest Debian Stable release.
+  # This job builds the module on the latest Debian Stable release.
   build-debian:
-    name: Build and Package for Debian Stable
+    name: Build for Debian Stable
     needs: check-for-new-version
     if: needs.check-for-new-version.outputs.should_build == 'true'
     runs-on: ubuntu-latest
@@ -97,13 +97,13 @@ jobs:
           apt-get install -y --no-install-recommends \
             build-essential libclang-dev pkg-config libpcre2-dev zlib1g-dev libssl-dev \
             libxml2-dev libxslt1-dev libgd-dev libgeoip-dev libperl-dev \
-            wget git curl ca-certificates jq
+            wget git curl ca-certificates
 
       # Step 2: Install the Rust toolchain.
       - name: Install Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      # Step 3: Download source code and build the module and NGINX.
+      # Step 3: Download source code and build the module.
       - name: Download and Build
         env:
           NGINX_VERSION: ${{ needs.check-for-new-version.outputs.version }}
@@ -162,59 +162,36 @@ jobs:
             --with-stream_geoip_module=dynamic \
             --add-dynamic-module=../nginx-acme/
 
-          make
+          make modules
 
-      # Step 4: Package the compiled artifacts (binary, module, configs) into a single tarball.
-      - name: Package Artifacts
+      # Step 4: Prepare the compiled module and its SHA256 checksum for upload.
+      - name: Verify and Prepare Artifact
         env:
           NGINX_VERSION: ${{ needs.check-for-new-version.outputs.version }}
         run: |
-          SOURCE_DIR="nginx-$NGINX_VERSION"
-          MODULE_PATH="$SOURCE_DIR/objs/ngx_http_acme_module.so"
-          NGINX_BINARY_PATH="$SOURCE_DIR/objs/nginx"
+          ls -l nginx-$NGINX_VERSION/objs/
+          MODULE_PATH="nginx-$NGINX_VERSION/objs/ngx_http_acme_module.so"
 
-          if [ ! -f "$MODULE_PATH" ] || [ ! -f "$NGINX_BINARY_PATH" ]; then
-            echo "::error::Build failed! One or more required files were not created."
+          if [ ! -f "$MODULE_PATH" ]; then
+            echo "::error::Build failed! The module file '$MODULE_PATH' was not created."
             exit 1
           fi
 
-          echo "Build successful. Packaging artifacts..."
+          echo "Build successful. Module file found at '$MODULE_PATH'"
 
-          PACKAGE_BASE_DIR="nginx-acme-package"
-          mkdir -p "$PACKAGE_BASE_DIR/sbin"
-          mkdir -p "$PACKAGE_BASE_DIR/modules"
-          mkdir -p "$PACKAGE_BASE_DIR/conf/conf.d"
-
-          # Copy compiled files
-          cp "$NGINX_BINARY_PATH" "$PACKAGE_BASE_DIR/sbin/nginx"
-          cp "$MODULE_PATH" "$PACKAGE_BASE_DIR/modules/ngx_http_acme_module.so"
-
-          # Copy default config files
-          cp "$SOURCE_DIR/conf/nginx.conf" "$PACKAGE_BASE_DIR/conf/"
-          cp "$SOURCE_DIR/conf/mime.types" "$PACKAGE_BASE_DIR/conf/"
-
-          # Add a README file
-          echo "This package contains NGINX ${{ needs.check-for-new-version.outputs.version }} with the ACME module." > "$PACKAGE_BASE_DIR/README.txt"
-          echo "To load the module, ensure this line is at the top of your nginx.conf:" >> "$PACKAGE_BASE_DIR/README.txt"
-          echo "load_module modules/ngx_http_acme_module.so;" >> "$PACKAGE_BASE_DIR/README.txt"
-
-          # Create the compressed archive
-          ARTIFACT_NAME="nginx-acme-${NGINX_VERSION}-debian-stable.tar.gz"
-          tar -czf "$ARTIFACT_NAME" "$PACKAGE_BASE_DIR"
-
-          # Prepare for upload
           ARTIFACT_DIR=artifact
-          mkdir -p "$ARTIFACT_DIR"
-          mv "$ARTIFACT_NAME" "$ARTIFACT_DIR/"
-          sha256sum "$ARTIFACT_DIR/$ARTIFACT_NAME" > "$ARTIFACT_DIR/$ARTIFACT_NAME.sha256"
-          echo "Packaged artifact created: $ARTIFACT_DIR/$ARTIFACT_NAME"
+          mkdir -p $ARTIFACT_DIR
+          MODULE_NAME="ngx${NGINX_VERSION}_http_acme_module.so"
+          mv "$MODULE_PATH" "$ARTIFACT_DIR/$MODULE_NAME"
+          cd $ARTIFACT_DIR
+          sha256sum "$MODULE_NAME" > "$MODULE_NAME.sha256"
 
 
-      # Step 5: Upload the packaged artifact to be used in the release job.
+      # Step 5: Upload the artifact to be used in the release job.
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nginx-package-debian-stable
+          name: module-debian-stable
           path: artifact/
 
   # This job creates a GitHub Release after the build is successful.
@@ -236,8 +213,7 @@ jobs:
         id: prep
         run: |
           mkdir -p release-assets
-          find ./dist -name "*.tar.gz" -exec mv {} ./release-assets/ \;
-
+          find ./dist -name "*.so" -exec mv {} ./release-assets/ \;
           echo "### SHA256 Checksum" > release-body.md
           echo '```' >> release-body.md
           find ./dist -name "*.sha256" -exec cat {} + >> release-body.md
@@ -253,6 +229,6 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           tag_name: nginx-${{ needs.check-for-new-version.outputs.version }}
-          name: NGINX ${{ needs.check-for-new-version.outputs.version }} with ACME Module (Debian Stable)
+          name: NGINX ACME Module for NGINX ${{ needs.check-for-new-version.outputs.version }}
           body: ${{ steps.prep.outputs.body }}
           files: ./release-assets/*
