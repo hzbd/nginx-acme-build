@@ -7,7 +7,7 @@
 # 2. A manual dispatch from the Actions UI.
 #
 
-name: Build and Release NGINX and ACME Module Package
+name: Build and Release NGINX with ACME Module Package
 
 on:
   workflow_dispatch:
