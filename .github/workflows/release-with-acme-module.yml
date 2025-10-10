@@ -93,7 +93,8 @@ jobs:
     needs: check-for-new-version
     if: needs.check-for-new-version.outputs.should_build == 'true'
     runs-on: ubuntu-latest
-    container: debian:stable
+    # container: debian:stable
+    container: debian:11. # GLIBC 2.31
 
     steps:
       - name: Install Build Dependencies
