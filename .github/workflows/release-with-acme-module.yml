@@ -44,8 +44,8 @@ jobs:
           else
             echo "No manual version specified. Detecting latest stable version..."
             LATEST_STABLE=$(curl -s https://nginx.org/download/ | \
-              grep -o 'nginx-[0-9.]\+\\.tar\\.gz' | \
-              sed -e 's/nginx-//' -e 's/\\.tar\\.gz//' | \
+              grep -o 'nginx-[0-9.]\+\.tar\.gz' | \
+              sed -e 's/nginx-//' -e 's/\.tar\.gz//' | \
               awk -F. '$2 % 2 == 0' | \
               sort -V | \
               tail -n 1)
@@ -265,7 +265,7 @@ jobs:
           #     }
           # }
           EOF
-          
+
           cat <<'EOF' > "$PACKAGE_BASE_DIR/README.txt"
           # NGINX with ACME Module Package
 
