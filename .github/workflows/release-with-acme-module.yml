@@ -127,7 +127,7 @@ jobs:
 
           ./configure \
             --with-cc-opt="$CC_OPT_VALUE" \
-            --with-ld-opt='-Wl,-z,relro -Wl,-z,now -Wl,--as-needed -fPIC' \
+            --with-ld-opt='-Wl,-z,relro -Wl,-z,now -Wl,--as-needed -fPIC -Wl,--export-dynamic' \
             --prefix=.. \
             --conf-path=nginx.conf \
             --http-log-path=logs/access.log \
