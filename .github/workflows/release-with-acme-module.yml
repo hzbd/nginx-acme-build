@@ -182,9 +182,14 @@ jobs:
           cp "$MODULE_PATH" "$PACKAGE_BASE_DIR/modules/ngx_http_acme_module.so"
           cp "$SOURCE_DIR/conf/mime.types" "$PACKAGE_BASE_DIR/"
 
-          cp ../../conf/nginx.conf "$PACKAGE_BASE_DIR/nginx.conf"
-          cp ../../conf/default.conf.example "$PACKAGE_BASE_DIR/vhost/default.conf.example"
-          cp ../../nginxctl.sh "$PACKAGE_BASE_DIR/nginxctl.sh"
+          echo -e "-----------------debug-------------------"
+          pwd
+          ls -alh
+          echo -e "------------------end--------------------"
+
+          cp conf/nginx.conf "$PACKAGE_BASE_DIR/nginx.conf"
+          cp conf/default.conf.example "$PACKAGE_BASE_DIR/vhost/default.conf.example"
+          cp nginxctl.sh "$PACKAGE_BASE_DIR/nginxctl.sh"
 
           chmod +x "$PACKAGE_BASE_DIR/nginxctl.sh"
 
