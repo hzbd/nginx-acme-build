@@ -22,7 +22,7 @@ The core design principle is **zero system dependencies**. By compiling NGINX wi
 After downloading and unpacking the archive, you will have a clean, ready-to-run NGINX environment:
 
 ```
-nginx-acme-package/
+nginx_acme/
 ├── acme/           # For ACME account keys, certificates, and challenges
 ├── logs/           # Stores access.log and error.log
 ├── modules/        # Contains the ngx_http_acme_module.so dynamic module
@@ -37,60 +37,61 @@ nginx-acme-package/
 
 ## 🚀 Usage Guide
 
+The downloaded package is designed to be managed entirely through the included `nginxctl.sh` script.
+
 ### Step 1: Download and Unpack
 
 1.  Go to this repository's **[Releases Page](https://github.com/hzbd/nginx-acme-build/releases)**.
-2.  Find the release corresponding to your desired NGINX version (e.g., `nginx-1.28.0`).
-3.  Download the `.tar.gz` archive from the "Assets" section.
-4.  Unpack the archive on your server:
+2.  Download the archive that matches your server's Debian version (e.g., `...-debian12.tar.gz`).
+3.  Unpack the archive on your server:
     ```bash
-    tar -xzf nginx-1.28.0-acme-debian-stable.tar.gz
-    cd nginx-acme-package
+    tar -xzf <archive-name>.tar.gz
+    cd nginx_acme
     ```
-    **Note**: If you have an existing NGINX instance installed via `apt`, stop and disable it (`sudo systemctl stop nginx`) to free up ports 80 and 443.
 
-### Step 2: Configure NGINX
+### Step 2: Configure Your Website
 
-1.  **Enable the ACME Module**:
-    Open the main configuration file `nginx.conf` and uncomment the `load_module` directive at the top of the file:
-    ```nginx
-    # load_module modules/ngx_http_acme_module.so;
-    ```
-    Remove the leading `#` to enable it.
-
-2.  **Configure Your Website**:
-    The `vhost` directory is where all your site configurations live.
-    a. First, copy the example file to create your own config:
+1.  **Review `nginx.conf`**: The main configuration file is already included. You may need to enable the `load_module` directive inside it.
+2.  **Set up your site**: Copy the vhost template to create your website's configuration file.
     ```bash
-    cp vhost/default.conf.example vhost/your_domain.conf
+    cp vhost/default.conf.example vhost/your_site.conf
     ```
-    b. Edit `vhost/your_domain.conf`, replacing placeholders like `your_domain.com` and `mail@your_domain.com` with your actual information.
-    c. As instructed in the example config, create the directory needed for the ACME challenge:
+3.  **Edit the config**: Open `vhost/your_site.conf` and update it with your domain, paths, and other settings.
+
+### Step 3: Manage NGINX with `nginxctl.sh`
+
+This script is your primary tool for controlling the NGINX service.
+
+1.  **Make the script executable (only needed once)**:
     ```bash
-    mkdir -p acme/challenge-root
+    chmod +x nginxctl.sh
     ```
 
-### Step 3: Start and Manage NGINX
-
-**Important**: All commands must be run from within the `nginx-acme-package` directory.
-
-1.  **Test Configuration**: Before starting, always check your configuration for syntax errors.
-    ```bash
-    # The -p $(pwd) flag tells NGINX to use the current directory as its prefix path.
-    # The -c nginx.conf flag specifies the relative path to the config file.
-    ./sbin/nginx -p $(pwd) -c nginx.conf -t
-    ```
-    If you see `syntax is ok` and `test is successful`, you are ready to start.
-
-2.  **Start NGINX**:
-    ```bash
-    ./sbin/nginx -p $(pwd) -c nginx.conf
-    ```
-
-3.  **Common Management Commands**:
-    -   **Reload Configuration**: `./sbin/nginx -p $(pwd) -s reload`
-    -   **Graceful Shutdown**: `./sbin/nginx -p $(pwd) -s quit`
-    -   **Fast Shutdown**: `./sbin/nginx -p $(pwd) -s stop`
+2.  **Use the script's commands**:
+    -   **Test configuration:** The script will automatically test the configuration before starting or reloading to prevent errors.
+        ```bash
+        ./nginxctl.sh test
+        ```
+    -   **Start NGINX:**
+        ```bash
+        ./nginxctl.sh start
+        ```
+    -   **Check status:**
+        ```bash
+        ./nginxctl.sh status
+        ```
+    -   **Reload configuration (after changing config files):**
+        ```bash
+        ./nginxctl.sh reload
+        ```
+    -   **Stop gracefully (waits for connections to finish):**
+        ```bash
+        ./nginxctl.sh quit
+        ```
+    -   **Stop immediately:**
+        ```bash
+        ./nginxctl.sh stop
+        ```
 
 ## ⚠️ Portability Disclaimer
 

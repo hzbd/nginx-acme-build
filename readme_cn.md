@@ -37,60 +37,62 @@ nginx-acme-package/
 
 ## 🚀 使用指南
 
+下载的软件包被设计为通过附带的 `nginxctl.sh` 脚本进行完整管理，这大大简化了操作。
+
 ### 第一步：下载并解压
 
 1.  访问本仓库的 **[Releases 页面](https://github.com/hzbd/nginx-acme-build/releases)**。
-2.  找到与您需要的 NGINX 版本对应的 Release (例如 `nginx-1.28.0`)。
-3.  从 "Assets" 区域下载 `.tar.gz` 压缩包。
-4.  在您的服务器上解压文件：
+2.  从 "Assets" 区域下载与您服务器 Debian 版本相匹配的压缩包 (例如 `...-debian12.tar.gz`)。
+3.  在您的服务器上解压文件：
     ```bash
-    tar -xzf nginx-1.28.0-acme-debian-stable.tar.gz
-    cd nginx-acme-package
+    tar -xzf <archive-name>.tar.gz
+    cd nginx_acme
     ```
-    **注意**: 如果您的系统上已通过 `apt` 安装了 NGINX，请先停止并禁用它 (`sudo systemctl stop nginx`)，以释放 80 和 443 端口。
+    **重要提示**: 如果您的系统上已通过 `apt` 安装了 NGINX，请先停止并禁用它 (`sudo systemctl stop nginx`)，以释放 80 和 443 端口。
 
-### 第二步：配置 NGINX
+### 第二步：配置您的网站
 
-1.  **启用 ACME 模块**:
-    打开主配置文件 `nginx.conf`，找到文件顶部的这行注释：
-    ```nginx
-    # load_module modules/ngx_http_acme_module.so;
-    ```
-    去掉 `#` 号以启用它。
-
-2.  **配置您的网站**:
-    `vhost` 目录是存放您所有网站配置的地方。
-    a. 首先，复制并重命名示例文件：
+1.  **检查主配置**: 主配置文件 `nginx.conf` 已包含在内。您可能需要根据 `conf/nginx.conf` 模板的设计，在其中启用 `load_module` 指令。
+2.  **设置您的站点**: 复制 vhost 模板以创建您网站的配置文件。
     ```bash
-    cp vhost/default.conf.example vhost/your_domain.conf
+    cp vhost/default.conf.example vhost/your_site.conf
     ```
-    b. 编辑 `vhost/your_domain.conf`，将其中的 `your_domain.com`、`mail@your_domain.com` 等占位符替换为您自己的信息。
-    c. 根据示例文件中的提示，创建 ACME 挑战所需的目录：
+3.  **编辑配置**: 打开 `vhost/your_site.conf` 文件，更新您的域名、路径和其他设置。
+
+### 第三步：使用 `nginxctl.sh` 管理 NGINX
+
+此脚本是您控制 NGINX 服务的主要工具。
+
+1.  **赋予执行权限 (仅需一次)**:
     ```bash
-    mkdir -p acme/challenge-root
+    chmod +x nginxctl.sh
     ```
 
-### 第三步：启动并管理 NGINX
-
-**重要**: 所有命令都应在 `nginx-acme-package` 目录下执行。
-
-1.  **测试配置**: 在启动前，务必检查配置文件语法是否正确。
-    ```bash
-    # -p $(pwd) 参数告诉 NGINX 使用当前目录作为其工作根目录
-    # -c nginx.conf 指定了配置文件的相对路径
-    ./sbin/nginx -p $(pwd) -c nginx.conf -t
-    ```
-    如果看到 `syntax is ok` 和 `test is successful`，说明配置无误。
-
-2.  **启动 NGINX**:
-    ```bash
-    ./sbin/nginx -p $(pwd) -c nginx.conf
-    ```
-
-3.  **常用管理命令**:
-    -   **重新加载配置**: `./sbin/nginx -p $(pwd) -s reload`
-    -   **平滑停止服务**: `./sbin/nginx -p $(pwd) -s quit`
-    -   **立即停止服务**: `./sbin/nginx -p $(pwd) -s stop`
+2.  **使用脚本命令**:
+    -   **测试配置**: 脚本在启动或重载前会自动测试配置，以防出错。
+        ```bash
+        ./nginxctl.sh test
+        ```
+    -   **启动 NGINX**:
+        ```bash
+        ./nginxctl.sh start
+        ```
+    -   **查看状态**:
+        ```bash
+        ./nginxctl.sh status
+        ```
+    -   **重载配置 (修改配置文件后)**:
+        ```bash
+        ./nginxctl.sh reload
+        ```
+    -   **平滑停止 (等待当前连接处理完毕)**:
+        ```bash
+        ./nginxctl.sh quit
+        ```
+    -   **立即停止**:
+        ```bash
+        ./nginxctl.sh stop
+        ```
 
 ## ⚠️ 重要提示：关于可移植性
 

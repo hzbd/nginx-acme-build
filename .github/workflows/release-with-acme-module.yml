@@ -181,125 +181,22 @@ jobs:
           cp "$NGINX_BINARY_PATH" "$PACKAGE_BASE_DIR/sbin/nginx"
           cp "$MODULE_PATH" "$PACKAGE_BASE_DIR/modules/ngx_http_acme_module.so"
           cp "$SOURCE_DIR/conf/mime.types" "$PACKAGE_BASE_DIR/"
-          cp "$SOURCE_DIR/conf/nginx.conf" "$PACKAGE_BASE_DIR/"
 
-          # Add the `load_module` directive back to the config template.
-          CONFIG_FILE="$PACKAGE_BASE_DIR/nginx.conf"
-          sed -i '1s|^|# To enable the NGINX ACME module, uncomment the following line:\n# load_module modules/ngx_http_acme_module.so;\n\n|' "$CONFIG_FILE"
-          sed -i 's|#pid        logs/nginx.pid;|pid        run/nginx.pid;|' "$CONFIG_FILE"
-          sed -i '/^\s*include\s*mime.types;\s*$/a \
-              client_body_temp_path temp/body;\n    proxy_temp_path temp/proxy;\n    fastcgi_temp_path temp/fastcgi;\n    scgi_temp_path temp/scgi;\n    uwsgi_temp_path temp/uwsgi;' "$CONFIG_FILE"
-          sed -i '/^\s*include\s*mime.types;\s*$/i # Load virtual host configs.\n    include vhost/*.conf;' "$CONFIG_FILE"
+          cp ../../conf/nginx.conf "$PACKAGE_BASE_DIR/nginx.conf"
+          cp ../../conf/default.conf.example "$PACKAGE_BASE_DIR/vhost/default.conf.example"
+          cp ../../nginxctl.sh "$PACKAGE_BASE_DIR/nginxctl.sh"
 
-          cat <<'EOF' > "$PACKAGE_BASE_DIR/vhost/default.conf.example"
-          # This is an example virtual host configuration file.
-          # To use it, rename this file to 'your_site.conf' and fill in your details.
-
-          # --- HTTP Server: Handles ACME challenge and redirects to HTTPS ---
-          server {
-              listen 80;
-              listen [::]:80;
-
-              # Replace with your domain(s)
-              server_name your_domain.com www.your_domain.com;
-
-              # This location is required by the ACME module to solve the HTTP-01 challenge.
-              # Create this directory: `mkdir -p acme/challenge-root`
-              location /.well-known/acme-challenge/ {
-                  root acme/challenge-root;
-              }
-
-              # For all other requests, redirect HTTP traffic to HTTPS.
-              location / {
-                  return 301 https://$host$request_uri;
-              }
-          }
-
-          # --- HTTPS Server Block (Your main configuration) ---
-          #
-          # IMPORTANT: Uncomment this entire block only AFTER the first certificate
-          # has been successfully obtained. Otherwise, NGINX will fail to start
-          # because the certificate files do not exist yet.
-          #
-          # server {
-          #     listen 443 ssl http2;
-          #     listen [::]:443 ssl http2;
-          #
-          #     server_name your_domain.com www.your_domain.com;
-          #
-          #     # --- ACME Module Configuration ---
-          #
-          #     # Enable automatic certificate management for this server block.
-          #     acme on;
-          #
-          #     # Define the path where certificates and account keys will be stored.
-          #     # This path is relative to the directory where you run nginx (the package root).
-          #     # The module will create a `storage` subdirectory inside `acme/`.
-          #     acme_storage_path acme;
-          #
-          #     # Tell the module which certificate to manage.
-          #     acme_certificate your_domain.com {
-          #         # Set your Let's Encrypt account email (required).
-          #         account mail@your_domain.com;
-          #         # Add any alternative domains for the same certificate (optional).
-          #         # domains www.your_domain.com;
-          #     }
-          #
-          #     # --- SSL Configuration ---
-          #
-          #     # Point NGINX to the certificate and key files managed by the ACME module.
-          #     # The paths are relative to the 'acme_storage_path' defined above.
-          #     ssl_certificate acme/storage/your_domain.com/fullchain.pem;
-          #     ssl_certificate_key acme/storage/your_domain.com/key.pem;
-          #
-          #     # Recommended: Add modern SSL/TLS parameters for security.
-          #     ssl_protocols TLSv1.2 TLSv1.3;
-          #     ssl_ciphers HIGH:!aNULL:!MD5;
-          #
-          #     # --- Website Configuration ---
-          #
-          #     # Your website's root directory and other configurations go here.
-          #     location / {
-          #         root /path/to/your/website;
-          #         index index.html;
-          #     }
-          # }
-          EOF
+          chmod +x "$PACKAGE_BASE_DIR/nginxctl.sh"
 
           cat <<'EOF' > "$PACKAGE_BASE_DIR/README.txt"
-          # NGINX with ACME Module Package
-
-          This package is fully portable. All paths in the configuration have been made relative.
-
-          ## Quick Start Guide
-
-          **Step 1: Unpack & Enter Directory**
-          ```bash
-          tar -xzf <archive-name>.tar.gz
-          cd nginx-acme
-          ```
-
-          **Step 2: Enable the ACME Module**
-          Open `nginx.conf` and uncomment the `load_module` line at the top.
-
-          **Step 3: Configure Your Website**
-          1. Rename `vhost/default.conf.example` to `vhost/your_site.conf`.
-          2. Edit the new file with your domain and settings.
-          3. Create the ACME challenge directory if needed.
-
-          **Step 4: Start NGINX**
-          (Commands remain the same, to be run from inside the `nginx-acme` directory)
-          ```bash
-          # Test configuration
-          ./sbin/nginx -p $(pwd) -c nginx.conf -t
-
-          # Start NGINX
-          ./sbin/nginx -p $(pwd) -c nginx.conf
-          ```
-
-          **Step 5: Manage NGINX**
-          - **Reload:** `./sbin/nginx -p $(pwd) -s reload`
-          - **Stop:** `./sbin/nginx -p $(pwd) -s stop`
+          Usage: ./nginxctl.sh {start|stop|quit|reload|test|status}
+          Commands:
+            start   - Start NGINX (tests config first)
+            stop    - Stop NGINX immediately (fast shutdown)
+            quit    - Stop NGINX gracefully
+            reload  - Reload configuration (tests config first)
+            test    - Test NGINX configuration
+            status  - Show NGINX process status
           EOF
 
           # Use the matrix variable to create a uniquely named archive.

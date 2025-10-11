@@ -1,0 +1,21 @@
+server {
+    listen 80;
+    server_name example.com www.example.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name example.com www.example.com;
+
+    acme_certificate    letsencrypt;
+    ssl_certificate     $acme_certificate;
+    ssl_certificate_key   $acme_certificate_key;
+    ssl_certificate_cache  max=2;  # required ngx 1.27.4+
+
+    location / {
+        default_type text/plain;
+        return 200 'hello world';
+    }
+}
