@@ -98,6 +98,8 @@ jobs:
     container: debian:${{ matrix.os_tag }}
 
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
       - name: Install Build Dependencies
         run: |
           apt-get update
