@@ -28,8 +28,9 @@ nginx-acme-package/
 ├── modules/        # 存放 ngx_http_acme_module.so 动态模块
 ├── run/            # 存放 nginx.pid 文件
 ├── sbin/           # 存放 nginx 二进制可执行文件
+├── nginxctl.sh     # nginx 生命周期管理脚本
 ├── temp/           # 存放代理、FastCGI 等临时文件
-├── vhost/        # 【重要】存放您的网站配置文件
+├── vhost/          # 【重要】存放您的网站配置文件
 ├── mime.types      # MIME 类型定义文件
 ├── nginx.conf      # 主配置文件
 └── README.txt      # 包含在此处的快速入门指南

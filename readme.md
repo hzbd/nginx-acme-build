@@ -28,8 +28,9 @@ nginx_acme/
 ├── modules/        # Contains the ngx_http_acme_module.so dynamic module
 ├── run/            # Stores the nginx.pid file
 ├── sbin/           # Contains the nginx executable binary
+├── nginxctl.sh     # NGINX Portable Instance Control Script
 ├── temp/           # For proxy, FastCGI, and other temporary files
-├── vhost/        # [IMPORTANT] Place your website server block configs here
+├── vhost/          # [IMPORTANT] Place your website server block configs here
 ├── mime.types      # Default MIME type definitions
 ├── nginx.conf      # Main configuration file
 └── README.txt      # A quick start guide included in the package
