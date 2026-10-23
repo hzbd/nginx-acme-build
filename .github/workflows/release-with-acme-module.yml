@@ -19,8 +19,11 @@ on:
     branches:
       - master
 
-permissions:
-  contents: write
+# Serialize overlapping runs (push / daily cron / manual dispatch): the queued
+# run re-checks the version and skips, so one version is never built twice.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   # This job checks if a new version of NGINX is available or if a manual
@@ -28,6 +31,9 @@ jobs:
   check-for-new-version:
     name: Check for New NGINX Stable Version
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 10
     outputs:
       should_build: ${{ steps.check_versions.outputs.should_build }}
       version: ${{ steps.check_versions.outputs.version }}
@@ -56,15 +62,16 @@ jobs:
             fi
             echo "Latest stable NGINX version is: $LATEST_STABLE"
 
-            LATEST_RELEASE_TAG=$(curl -sf -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-              "https://api.github.com/repos/${{ github.repository }}/releases/latest" | \
-              jq -r .tag_name || true)
+            # Distinguish "no release yet" (HTTP 404) from a transient API
+            # failure, so a rate limit cannot trigger a redundant full rebuild.
+            HTTP_CODE=$(curl -s -o "$RUNNER_TEMP/latest_release.json" -w '%{http_code}' \
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${{ github.repository }}/releases/latest")
 
-            if [ -z "$LATEST_RELEASE_TAG" ]; then
-              echo "No previous release found. Triggering initial build."
-              echo "should_build=true" >> "$GITHUB_OUTPUT"
-            else
-              LAST_RELEASED_VERSION=$(echo "$LATEST_RELEASE_TAG" | sed 's/^nginx-//')
+            if [ "$HTTP_CODE" = "200" ]; then
+              LATEST_RELEASE_TAG=$(jq -r .tag_name "$RUNNER_TEMP/latest_release.json")
+              LAST_RELEASED_VERSION=${LATEST_RELEASE_TAG#nginx-}
               echo "Last released version is: $LAST_RELEASED_VERSION"
               if [ "$LATEST_STABLE" != "$LAST_RELEASED_VERSION" ]; then
                 echo "New version detected ($LATEST_STABLE). Proceeding with build."
@@ -73,6 +80,12 @@ jobs:
                 echo "Version $LATEST_STABLE is already the latest. Build skipped."
                 echo "should_build=false" >> "$GITHUB_OUTPUT"
               fi
+            elif [ "$HTTP_CODE" = "404" ]; then
+              echo "No previous release found. Triggering initial build."
+              echo "should_build=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "::error::GitHub API request failed with HTTP $HTTP_CODE. Aborting instead of triggering a redundant rebuild."
+              exit 1
             fi
             echo "version=$LATEST_STABLE" >> "$GITHUB_OUTPUT"
           fi
@@ -89,34 +102,37 @@ jobs:
     strategy:
       matrix:
         include:
-          - os_name: Debian 11 (Bullseye)
-            os_tag: '11'
           - os_name: Debian 12 (Bookworm)
             os_tag: '12'
+          - os_name: Debian 13 (Trixie)
+            os_tag: '13'
 
     # Use the matrix variable to select the correct Docker container.
     container: debian:${{ matrix.os_tag }}
+    permissions:
+      contents: read
+    timeout-minutes: 60
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Install Build Dependencies
         run: |
           apt-get update
-          # Install libssl-dev for dynamic linking against the system's OpenSSL.
+          # libclang-dev is required by nginx-acme's bindgen; libssl-dev for
+          # dynamic linking against the system's OpenSSL.
           apt-get install -y --no-install-recommends \
             build-essential libclang-dev pkg-config libpcre2-dev zlib1g-dev libssl-dev \
-            libxml2-dev libxslt1-dev libgd-dev libgeoip-dev libperl-dev \
-            wget git curl ca-certificates jq
+            wget git curl ca-certificates
 
       - name: Install Rust Toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
 
       - name: Download and Build (Dynamically Linked)
         env:
           NGINX_VERSION: ${{ needs.check-for-new-version.outputs.version }}
         run: |
-          wget -q http://nginx.org/download/nginx-$NGINX_VERSION.tar.gz
+          wget -q https://nginx.org/download/nginx-$NGINX_VERSION.tar.gz
           tar -zxf nginx-$NGINX_VERSION.tar.gz
           git clone --depth 1 https://github.com/nginx/nginx-acme.git
           cd nginx-$NGINX_VERSION
@@ -142,13 +158,20 @@ jobs:
             --http-scgi-temp-path=temp/scgi \
             --http-uwsgi-temp-path=temp/uwsgi \
             --with-compat \
-            --with-debug \
             --with-pcre-jit \
+            --with-threads \
             --with-http_ssl_module \
             --with-http_stub_status_module \
             --with-http_realip_module \
             --with-http_auth_request_module \
             --with-http_v2_module \
+            --with-http_gzip_static_module \
+            --with-http_sub_module \
+            --with-http_slice_module \
+            --with-stream \
+            --with-stream_ssl_module \
+            --with-stream_ssl_preread_module \
+            --with-stream_realip_module \
             --add-dynamic-module=../nginx-acme/
 
           make
@@ -157,6 +180,7 @@ jobs:
         env:
           NGINX_VERSION: ${{ needs.check-for-new-version.outputs.version }}
           OS_TAG: ${{ matrix.os_tag }}
+          OS_NAME: ${{ matrix.os_name }}
         run: |
           SOURCE_DIR="nginx-$NGINX_VERSION"
           MODULE_PATH="$SOURCE_DIR/objs/ngx_http_acme_module.so"
@@ -195,6 +219,16 @@ jobs:
 
           chmod +x "$PACKAGE_BASE_DIR/nginxctl.sh"
 
+          # Record build provenance so a shipped binary can be traced back to
+          # the exact nginx-acme sources it was built from.
+          ACME_COMMIT=$(git -C nginx-acme rev-parse HEAD)
+          cat > "$PACKAGE_BASE_DIR/BUILD-INFO" <<EOF
+          nginx_version=$NGINX_VERSION
+          acme_module_commit=$ACME_COMMIT
+          build_date=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+          build_os=$OS_NAME
+          EOF
+
           cat <<'EOF' > "$PACKAGE_BASE_DIR/README.txt"
           Usage: ./nginxctl.sh {start|stop|quit|reload|test|status}
           Commands:
@@ -229,6 +263,9 @@ jobs:
     needs: [check-for-new-version, build-debian]
     if: needs.check-for-new-version.outputs.should_build == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 10
     steps:
       - name: Download all artifacts from build jobs
         uses: actions/download-artifact@v4
@@ -260,7 +297,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Create Release and Upload All Assets
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           tag_name: nginx-${{ needs.check-for-new-version.outputs.version }}

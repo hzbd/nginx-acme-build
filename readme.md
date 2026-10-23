@@ -4,7 +4,7 @@
 
 [![Build and Release NGINX ACME Module](https://github.com/hzbd/nginx-acme-build/actions/workflows/release-with-acme-module.yml/badge.svg)](https://github.com/hzbd/nginx-acme-build/actions/workflows/release-with-acme-module.yml)
 
-This repository uses GitHub Actions to automatically build a **fully portable, self-contained NGINX package**. It comes bundled with the official [Nginx-ACME](https://github.com/nginx/nginx-acme) module and is compiled on the latest Debian Stable release to ensure optimal compatibility.
+This repository uses GitHub Actions to automatically build a **fully portable, self-contained NGINX package**. It comes bundled with the official [Nginx-ACME](https://github.com/nginx/nginx-acme) module and is compiled on Debian 12 and 13 to ensure broad compatibility.
 
 The core design principle is **zero system dependencies**. By compiling NGINX with **relative paths**, this workflow produces a package that does not rely on standard system directories (like `/etc/nginx` or `/var/log/nginx`). You can run it on any compatible Linux system without installing NGINX first.
 
@@ -33,6 +33,7 @@ nginx_acme/
 ├── vhost/          # [IMPORTANT] Place your website server block configs here
 ├── mime.types      # Default MIME type definitions
 ├── nginx.conf      # Main configuration file
+├── BUILD-INFO      # Build metadata (NGINX version, ACME module commit)
 └── README.txt      # A quick start guide included in the package
 ```
 
@@ -102,7 +103,7 @@ Attempting to do so will lead to critical issues, including path conflicts, modu
 
 ## 🔧 Build Your Own Version
 
-If you require a package for a specific (or even an older, nginx 1.25.0 or later.) version of NGINX, or if you wish to customize the compile-time parameters, you can easily fork this repository and build it yourself.
+If you require a package for a specific (or even an older, nginx 1.27.4 or later.) version of NGINX, or if you wish to customize the compile-time parameters, you can easily fork this repository and build it yourself.
 
 1.  **Fork this Repository**: Click the 'Fork' button in the top-right corner of this page.
 2.  **Enable Actions**: In your forked repository, navigate to the 'Actions' tab and click the button to enable workflows.

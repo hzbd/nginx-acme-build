@@ -4,7 +4,7 @@
 
 [![Build and Release NGINX Package](https://github.com/hzbd/nginx-acme-build/actions/workflows/release-with-acme-module.yml/badge.svg)](https://github.com/hzbd/nginx-acme-build/actions/workflows/release-with-acme-module.yml)
 
-本项目使用 GitHub Actions 自动构建一个**完全可移植、自包含的 NGINX 软件包**。该软件包内置了官方的 [Nginx-ACME](https://github.com/nginx/nginx-acme) 模块，并在最新的 Debian Stable 环境下编译，以确保最佳的兼容性。
+本项目使用 GitHub Actions 自动构建一个**完全可移植、自包含的 NGINX 软件包**。该软件包内置了官方的 [Nginx-ACME](https://github.com/nginx/nginx-acme) 模块，并在 Debian 12 和 13 环境下编译，以确保广泛的兼容性。
 
 这个工作流的核心设计理念是**“零系统依赖”**。它通过在编译时指定**相对路径**，创建了一个不依赖于系统目录结构（如 `/etc/nginx` 或 `/var/log/nginx`）的 NGINX 环境。您无需在服务器上安装 NGINX，下载解压后即可直接运行。
 
@@ -22,7 +22,7 @@
 下载并解压后，您会得到一个结构清晰、立即可用的 NGINX 环境：
 
 ```
-nginx-acme-package/
+nginx_acme/
 ├── acme/           # 用于存放 ACME 账户密钥、证书和挑战文件
 ├── logs/           # 存放 access.log 和 error.log
 ├── modules/        # 存放 ngx_http_acme_module.so 动态模块
@@ -33,6 +33,7 @@ nginx-acme-package/
 ├── vhost/          # 【重要】存放您的网站配置文件
 ├── mime.types      # MIME 类型定义文件
 ├── nginx.conf      # 主配置文件
+├── BUILD-INFO      # 构建信息（NGINX 版本、ACME 模块 commit）
 └── README.txt      # 包含在此处的快速入门指南
 ```
 
@@ -103,7 +104,7 @@ nginx-acme-package/
 
 ## 🔧 构建您自己的版本
 
-如果您需要一个特定（甚至是旧的，但至少是1.25.0以后的版本）NGINX 版本，或者想要自定义编译参数，您可以轻松地 fork 本仓库并自行构建。
+如果您需要一个特定（甚至是旧的，但至少是 1.27.4 以后的版本）NGINX 版本，或者想要自定义编译参数，您可以轻松地 fork 本仓库并自行构建。
 
 1.  **Fork 本仓库**: 点击页面右上角的 'Fork' 按钮。
 2.  **启用 Actions**: 在您 fork 后的仓库页面，进入 'Actions' 标签页，并按提示启用 GitHub Actions。
